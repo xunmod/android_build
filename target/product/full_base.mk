@@ -24,8 +24,7 @@ PRODUCT_PACKAGES := \
     OpenWnn \
     libWnnEngDic \
     libWnnJpnDic \
-    libwnndict \
-    WAPPushManager
+    libwnndict
 
 PRODUCT_PACKAGES += \
     Galaxy4 \

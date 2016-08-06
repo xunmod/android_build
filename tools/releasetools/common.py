@@ -1107,7 +1107,7 @@ DataImage = blockimgdiff.DataImage
 
 # map recovery.fstab's fs_types to mount/format "partition types"
 PARTITION_TYPES = { "yaffs2": "MTD", "mtd": "MTD",
-                    "ext4": "EMMC", "emmc": "EMMC",
+                    "ext4": "EMMC", "emmc": "EMMC", "vfat": "EMMC",
                     "f2fs": "EMMC" }
 
 def GetTypeAndDevice(mount_point, info):
@@ -1117,6 +1117,15 @@ def GetTypeAndDevice(mount_point, info):
   else:
     return None
 
+def GetFex(name,path):
+  if os.path.exists(path):
+    fex=open(path)
+    data=fex.read()
+    fex.close()
+    return File(name,data)
+  else:
+    print " %s is not exist " %(path)
+    return File(name,"")
 
 def ParseCertificate(data):
   """Parse a PEM-format certificate."""

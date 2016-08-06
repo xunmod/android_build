@@ -502,6 +502,7 @@ def WriteFullOTAPackage(input_zip, output_zip):
 
   AppendAssertions(script, OPTIONS.info_dict, oem_dict)
   device_specific.FullOTA_Assertions()
+  script.AssertBootVersion()
 
   # Two-step package strategy (in chronological order, which is *not*
   # the order in which the generated script has things):
@@ -619,6 +620,27 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   script.WriteRawImage("/boot", "boot.img")
 
   script.ShowProgress(0.2, 10)
+  print("pack uboot to OTA package...")
+  script.Print("Update boot source...")
+  boot_resource_fex = common.GetFex("boot-resource.fex",OPTIONS.target_tmp+str("/boot-resource.fex"))
+  common.ZipWriteStr(output_zip, "boot-resource.fex", boot_resource_fex.data)
+  script.WriteRawFex("/dev/block/by-name/bootloader", "boot-resource.fex")
+
+  env_fex = common.GetFex("env.fex",OPTIONS.target_tmp+str("/env.fex"))
+  common.ZipWriteStr(output_zip,"env.fex",env_fex.data)
+  script.WriteRawFex("/dev/block/by-name/env","env.fex")
+
+  uboot = common.GetFex("u-boot.fex", OPTIONS.target_tmp + str("/u-boot.fex"))
+  common.ZipWriteStr(output_zip, "u-boot.fex", uboot.data)
+  script.BurnBoot(1);
+
+  boot0_nand = common.GetFex("boot0_nand.fex", OPTIONS.target_tmp + str("/boot0_nand.fex"))
+  common.ZipWriteStr(output_zip, "boot0_nand.fex", boot0_nand.data)
+  boot0_sdcard = common.GetFex("boot0_sdcard.fex", OPTIONS.target_tmp + str("/boot0_sdcard.fex"))
+  common.ZipWriteStr(output_zip, "boot0_sdcard.fex", boot0_sdcard.data)
+  script.BurnBoot(0);
+
+  script.ShowProgress(0.2, 10)
   device_specific.FullOTA_InstallEnd()
 
   if OPTIONS.extra_script is not None:
@@ -722,6 +744,7 @@ def WriteBlockIncrementalOTAPackage(target_zip, source_zip, output_zip):
   target_fp = GetBuildProp("ro.build.fingerprint", OPTIONS.target_info_dict)
   metadata["pre-build"] = source_fp
   metadata["post-build"] = target_fp
+  script.Mount("/cache")
 
   source_boot = common.GetBootableImage(
       "/tmp/boot.img", "boot.img", OPTIONS.source_tmp, "BOOT",
@@ -737,6 +760,24 @@ def WriteBlockIncrementalOTAPackage(target_zip, source_zip, output_zip):
   target_recovery = common.GetBootableImage(
       "/tmp/recovery.img", "recovery.img", OPTIONS.target_tmp, "RECOVERY")
   updating_recovery = (source_recovery.data != target_recovery.data)
+
+  source_boot_resource = common.GetFex("boot-resource.fex",OPTIONS.source_tmp+str("/boot-resource.fex"))
+  target_boot_resource = common.GetFex("boot-resource.fex",OPTIONS.target_tmp+str("/boot-resource.fex"))
+  updating_boot_resource = (source_boot_resource.data != target_boot_resource.data)
+
+  source_env = common.GetFex("env.fex",OPTIONS.source_tmp+str("/env.fex"))
+  target_env = common.GetFex("env.fex",OPTIONS.target_tmp+str("/env.fex"))
+  updating_env = (source_env.data != target_env.data)
+
+  source_boot0_nand = common.GetFex("boot0_nand.fex",OPTIONS.source_tmp+str("/boot0_nand.fex"))
+  target_boot0_nand = common.GetFex("boot0_nand.fex",OPTIONS.target_tmp+str("/boot0_nand.fex"))
+  source_boot0_sdcard = common.GetFex("boot0_sdcard.fex",OPTIONS.source_tmp+str("/boot0_sdcard.fex"))
+  target_boot0_sdcard = common.GetFex("boot0_sdcard.fex",OPTIONS.target_tmp+str("/boot0_sdcard.fex"))
+  updating_boot0 = (source_boot0_nand.data != target_boot0_nand.data) or (source_boot0_sdcard.data != target_boot0_sdcard.data)
+
+  source_uboot = common.GetFex("u-boot.fex", OPTIONS.source_tmp + str("/u-boot.fex"))
+  target_uboot = common.GetFex("u-boot.fex", OPTIONS.target_tmp + str("/u-boot.fex"))
+  updating_uboot = (source_uboot.data != target_uboot.data)
 
   system_src = GetImage("system", OPTIONS.source_tmp, OPTIONS.source_info_dict)
   system_tgt = GetImage("system", OPTIONS.target_tmp, OPTIONS.target_info_dict)
@@ -764,6 +805,7 @@ def WriteBlockIncrementalOTAPackage(target_zip, source_zip, output_zip):
 
   AppendAssertions(script, OPTIONS.target_info_dict, oem_dict)
   device_specific.IncrementalOTA_Assertions()
+  script.AssertBootVersion()
 
   # Two-step incremental package strategy (in chronological order,
   # which is *not* the order in which the generated script has
@@ -887,6 +929,35 @@ else
                           source_boot.sha1, "patch/boot.img.p")
     else:
       print "boot image unchanged; skipping."
+
+  if updating_boot_resource:
+    print "boot-resource fex changed; including."
+    common.ZipWriteStr(output_zip, "boot-resource.fex", target_boot_resource.data)
+    script.WriteRawFex("/dev/block/by-name/bootloader", "boot-resource.fex")
+  else:
+    print "boot-resource fex unchanged; skipping."
+
+  if updating_env:
+    print "env fex changed; including."
+    common.ZipWriteStr(output_zip,"env.fex",target_env.data)
+    script.WriteRawFex("/dev/block/by-name/env","env.fex")
+  else:
+    print "env fex unchanged; skipping."
+
+  if updating_uboot:
+    print "uboot fex changed; including."
+    common.ZipWriteStr(output_zip, "u-boot.fex", target_uboot.data)
+    script.BurnBoot(1);
+  else:
+    print "uboot fex unchanged; skipping."
+
+  if updating_boot0:
+    print "boot0 fex changed; including."
+    common.ZipWriteStr(output_zip,"boot0_nand.fex",target_boot0_nand.data)
+    common.ZipWriteStr(output_zip,"boot0_sdcard.fex",target_boot0_sdcard.data)
+    script.BurnBoot(0);
+  else:
+    print "boot0 fex unchanged; skipping."
 
   # Do device-specific installation (eg, write radio image).
   device_specific.IncrementalOTA_InstallEnd()
@@ -1101,6 +1172,7 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
 
   metadata["pre-build"] = source_fp
   metadata["post-build"] = target_fp
+  script.Mount("/cache")
 
   source_boot = common.GetBootableImage(
       "/tmp/boot.img", "boot.img", OPTIONS.source_tmp, "BOOT",
@@ -1117,6 +1189,24 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
       "/tmp/recovery.img", "recovery.img", OPTIONS.target_tmp, "RECOVERY")
   updating_recovery = (source_recovery.data != target_recovery.data)
 
+  source_boot_resource = common.GetFex("boot-resource.fex",OPTIONS.source_tmp+str("/boot-resource.fex"))
+  target_boot_resource = common.GetFex("boot-resource.fex",OPTIONS.target_tmp+str("/boot-resource.fex"))
+  updating_boot_resource = (source_boot_resource.data != target_boot_resource.data)
+
+  source_env = common.GetFex("env.fex",OPTIONS.source_tmp+str("/env.fex"))
+  target_env = common.GetFex("env.fex",OPTIONS.target_tmp+str("/env.fex"))
+  updating_env = (source_env.data != target_env.data)
+
+  source_boot0_nand = common.GetFex("boot0_nand.fex",OPTIONS.source_tmp+str("/boot0_nand.fex"))
+  target_boot0_nand = common.GetFex("boot0_nand.fex",OPTIONS.target_tmp+str("/boot0_nand.fex"))
+  source_boot0_sdcard = common.GetFex("boot0_sdcard.fex",OPTIONS.source_tmp+str("/boot0_sdcard.fex"))
+  target_boot0_sdcard = common.GetFex("boot0_sdcard.fex",OPTIONS.target_tmp+str("/boot0_sdcard.fex"))
+  updating_boot0 = (source_boot0_nand.data != target_boot0_nand.data) or (source_boot0_sdcard.data != target_boot0_sdcard.data)
+
+  source_uboot = common.GetFex("u-boot.fex", OPTIONS.source_tmp + str("/u-boot.fex"))
+  target_uboot = common.GetFex("u-boot.fex", OPTIONS.target_tmp + str("/u-boot.fex"))
+  updating_uboot = (source_uboot.data != target_uboot.data)
+
   # Here's how we divide up the progress bar:
   #  0.1 for verifying the start state (PatchCheck calls)
   #  0.8 for applying patches (ApplyPatch calls)
@@ -1125,6 +1215,7 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
 
   AppendAssertions(script, OPTIONS.target_info_dict, oem_dict)
   device_specific.IncrementalOTA_Assertions()
+  script.AssertBootVersion()
 
   # Two-step incremental package strategy (in chronological order,
   # which is *not* the order in which the generated script has
@@ -1253,6 +1344,35 @@ else
       print "boot image changed; including."
     else:
       print "boot image unchanged; skipping."
+
+  if updating_boot_resource:
+    print "boot-resource fex changed; including."
+    common.ZipWriteStr(output_zip, "boot-resource.fex", target_boot_resource.data)
+    script.WriteRawFex("/dev/block/by-name/bootloader", "boot-resource.fex")
+  else:
+    print "boot-resource fex unchanged; skipping."
+
+  if updating_env:
+    print "env fex changed; including."
+    common.ZipWriteStr(output_zip,"env.fex",target_env.data)
+    script.WriteRawFex("/dev/block/by-name/env","env.fex")
+  else:
+    print "env fex unchanged; skipping."
+
+  if updating_uboot:
+    print "uboot fex changed; including."
+    common.ZipWriteStr(output_zip, "u-boot.fex", target_uboot.data)
+    script.BurnBoot(1);
+  else:
+    print "uboot fex unchanged; skipping."
+
+  if updating_boot0:
+    print "boot0 fex changed; including."
+    common.ZipWriteStr(output_zip,"boot0_nand.fex",target_boot0_nand.data)
+    common.ZipWriteStr(output_zip,"boot0_sdcard.fex",target_boot0_sdcard.data)
+    script.BurnBoot(0);
+  else:
+    print "boot0 fex unchanged; skipping."
 
   system_items = ItemSet("system", "META/filesystem_config.txt")
   if vendor_diff:

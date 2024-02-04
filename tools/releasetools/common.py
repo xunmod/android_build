@@ -1117,15 +1117,6 @@ def GetTypeAndDevice(mount_point, info):
   else:
     return None
 
-def GetFex(name,path):
-  if os.path.exists(path):
-    fex=open(path)
-    data=fex.read()
-    fex.close()
-    return File(name,data)
-  else:
-    print " %s is not exist " %(path)
-    return File(name,"")
 
 def ParseCertificate(data):
   """Parse a PEM-format certificate."""

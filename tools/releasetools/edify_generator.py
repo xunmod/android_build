@@ -291,10 +291,6 @@ class EdifyGenerator(object):
       else:
         raise ValueError("don't know how to write \"%s\" partitions" % (p.fs_type,))
 
-  def WriteRawFex(self,mount_point,fn):
-     self.script.append(
-       'package_extract_file("%s","%s");'%(fn,mount_point))
-
   def SetPermissions(self, fn, uid, gid, mode, selabel, capabilities):
     """Set file ownership and permissions."""
     if not self.info.get("use_set_metadata", False):
@@ -364,12 +360,3 @@ class EdifyGenerator(object):
       data = open(input_path, "rb").read()
     common.ZipWriteStr(output_zip, "META-INF/com/google/android/update-binary",
                        data, perms=0755)
-
-  def BurnBoot(self,boot):
-    self.script.append('burnboot(%d);'%(boot))
-
-  def WriteRawFex(self,mount_point,fn):
-    self.script.append('package_extract_file("%s","%s");'%(fn,mount_point))
-
-  def AssertBootVersion(self):
-    self.script.append('assert_boot_version(%s);'%(self.info.get("boot_version", "0")))
